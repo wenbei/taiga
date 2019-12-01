@@ -1,0 +1,36 @@
+
+trigger:
+  branches:
+    include:
+    - '*'
+    exclude:
+    - master
+
+variables:
+  solution: project/vs2019/Taiga.sln
+  buildPlatform: Win32
+  buildConfiguration: Debug
+
+jobs:
+- job: BuildDebug
+  displayName: Build Debug
+  pool:
+    vmImage: windows-latest
+  steps:
+  - checkout: self
+    submodules: recursive
+
+  - task: BatchScript@1
+    displayName: Build libcurl
+    inputs:
+      filename: deps/build-ci-debug.bat
+
+  - task: VSBuild@1
+    displayName: Build Taiga
+    inputs:
+      solution: $(solution)
+      platform: $(buildPlatform)
+      configuration: $(buildConfiguration)
+
+  - publish: $(System.DefaultWorkingDirectory)/bin/Debug/Taiga.exe
+    artifact: TaigaDebug

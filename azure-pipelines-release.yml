@@ -1,0 +1,38 @@
+
+trigger:
+- master
+
+variables:
+  solution: project/vs2019/Taiga.sln
+  buildPlatform: Win32
+  buildConfiguration: Release
+
+jobs:
+- job: BuildRelease
+  displayName: Build Release
+  pool:
+    vmImage: windows-latest
+  steps:
+  - checkout: self
+    submodules: recursive
+
+  - task: BatchScript@1
+    displayName: Build libcurl
+    inputs:
+      filename: deps/build-ci-release.bat
+
+  - task: VSBuild@1
+    displayName: Build Taiga
+    inputs:
+      solution: $(solution)
+      platform: $(buildPlatform)
+      configuration: $(buildConfiguration)
+
+  - script: makensis $(System.DefaultWorkingDirectory)/setup/Taiga.nsi
+    displayName: Make installer
+
+  - publish: $(System.DefaultWorkingDirectory)/bin/Release/Taiga.exe
+    artifact: Taiga
+
+  - publish: $(System.DefaultWorkingDirectory)/bin/TaigaSetup.exe
+    artifact: TaigaSetup
