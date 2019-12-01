@@ -62,10 +62,10 @@ enum class SeriesType {
 enum class MyStatus {
   NotInList,
   Watching,
+  PlanToWatch,
   Completed,
   OnHold,
   Dropped,
-  PlanToWatch,
 };
 
 enum class TitleLanguage {
@@ -92,9 +92,9 @@ constexpr std::array<SeriesType, 6> kSeriesTypes{
 constexpr std::array<MyStatus, 5> kMyStatuses{
   MyStatus::Watching,
   MyStatus::Completed,
+  MyStatus::PlanToWatch,
   MyStatus::OnHold,
   MyStatus::Dropped,
-  MyStatus::PlanToWatch,
 };
 
 constexpr int kUnknownEpisodeCount = -1;

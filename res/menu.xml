@@ -105,10 +105,10 @@
 	</menu>
 	<menu name="AddToList">
 		<item name="Currently watching" action="AddToList(1)"/>
-		<item name="Completed"          action="AddToList(2)"/>
-		<item name="On hold"            action="AddToList(3)"/>
-		<item name="Dropped"            action="AddToList(4)"/>
-		<item name="Plan to watch"      action="AddToList(5)"/>
+		<item name="Plan to watch"      action="AddToList(2)"/>
+		<item name="Completed"          action="AddToList(3)"/>
+		<item name="On hold"            action="AddToList(4)"/>
+		<item name="Dropped"            action="AddToList(5)"/>
 	</menu>
 	
 	<!-- Right click -->
@@ -169,10 +169,10 @@
 	<!-- Status -->
 	<menu name="EditStatus">
 		<item name="Currently watching" action="EditStatus(1)" radio="1"/>
-		<item name="Completed"          action="EditStatus(2)" radio="1"/>
-		<item name="On hold"            action="EditStatus(3)" radio="1"/>
-		<item name="Dropped"            action="EditStatus(4)" radio="1"/>
-		<item name="Plan to watch"      action="EditStatus(5)" radio="1"/>
+		<item name="Plan to watch"      action="EditStatus(2)" radio="1"/>
+		<item name="Completed"          action="EditStatus(3)" radio="1"/>
+		<item name="On hold"            action="EditStatus(4)" radio="1"/>
+		<item name="Dropped"            action="EditStatus(5)" radio="1"/>
 	</menu>
 	<!-- Search -->
 	<menu name="Search">
