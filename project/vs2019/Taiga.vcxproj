@@ -478,6 +478,24 @@
     <ResourceCompile Include="..\..\src\taiga\resource.rc" />
     <ResourceCompile Include="..\..\src\taiga\version.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Xml Include="..\..\res\menu.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\deps\src\anisthesia\data\players.anisthesia" />
+    <None Include="..\..\src\sync\anilist\DeleteMediaListEntry.gql" />
+    <None Include="..\..\src\sync\anilist\Media.gql" />
+    <None Include="..\..\src\sync\anilist\MediaFields.gql" />
+    <None Include="..\..\src\sync\anilist\MediaListCollection.gql" />
+    <None Include="..\..\src\sync\anilist\MediaListFields.gql" />
+    <None Include="..\..\src\sync\anilist\MediaSearch.gql" />
+    <None Include="..\..\src\sync\anilist\MediaSeason.gql" />
+    <None Include="..\..\src\sync\anilist\SaveMediaListEntry.gql" />
+    <None Include="..\..\src\sync\anilist\Viewer.gql" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\..\res\Taiga.ico" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

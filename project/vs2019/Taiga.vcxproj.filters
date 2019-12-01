@@ -1212,4 +1212,22 @@
       <Filter>taiga</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Xml Include="..\..\res\menu.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\sync\anilist\DeleteMediaListEntry.gql" />
+    <None Include="..\..\src\sync\anilist\Media.gql" />
+    <None Include="..\..\src\sync\anilist\MediaFields.gql" />
+    <None Include="..\..\src\sync\anilist\MediaListCollection.gql" />
+    <None Include="..\..\src\sync\anilist\MediaListFields.gql" />
+    <None Include="..\..\src\sync\anilist\MediaSearch.gql" />
+    <None Include="..\..\src\sync\anilist\MediaSeason.gql" />
+    <None Include="..\..\src\sync\anilist\SaveMediaListEntry.gql" />
+    <None Include="..\..\src\sync\anilist\Viewer.gql" />
+    <None Include="..\..\deps\src\anisthesia\data\players.anisthesia" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\..\res\Taiga.ico" />
+  </ItemGroup>
 </Project>
