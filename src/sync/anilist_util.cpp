@@ -72,6 +72,8 @@ anime::SeriesType TranslateSeriesTypeFrom(const std::string& value) {
     {"OVA", anime::SeriesType::Ova},
     {"ONA", anime::SeriesType::Ona},
     {"MUSIC", anime::SeriesType::Music},
+    {"MANGA", anime::SeriesType::Manga},
+    {"NOVEL", anime::SeriesType::Novel},
   };
 
   const auto it = table.find(value);

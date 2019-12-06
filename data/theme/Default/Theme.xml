@@ -32,7 +32,8 @@
 			<icon name="balloon-left"/>
 			<icon name="clock"/>
 			<icon name="home"/>
-			<icon name="document-attribute"/>
+      <icon name="document-A"/>
+      <icon name="document-M"/>
 			<icon name="chart"/>
 			<icon name="feed"/>
 			<icon name="ui-scroll-pane-detail"/>

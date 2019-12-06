@@ -189,6 +189,7 @@ void MainDialog::CreateDialogControls() {
   treeview.hti.push_back(treeview.InsertItem(L"Now Playing", ui::kIcon16_Play, kSidebarItemNowPlaying, nullptr));
   treeview.hti.push_back(treeview.InsertItem(nullptr, -1, kSidebarItemSeparator1, nullptr));
   treeview.hti.push_back(treeview.InsertItem(L"Anime List", ui::kIcon16_DocumentA, kSidebarItemAnimeList, nullptr));
+  treeview.hti.push_back(treeview.InsertItem(L"Manga List", ui::kIcon16_DocumentM, kSidebarItemMangaList, nullptr));
   treeview.hti.push_back(treeview.InsertItem(L"History", ui::kIcon16_Clock, kSidebarItemHistory, nullptr));
   treeview.hti.push_back(treeview.InsertItem(L"Statistics", ui::kIcon16_Chart, kSidebarItemStats, nullptr));
   treeview.hti.push_back(treeview.InsertItem(nullptr, -1, kSidebarItemSeparator2, nullptr));
@@ -397,6 +398,16 @@ BOOL MainDialog::PreTranslateMessage(MSG* pMsg) {
                 return TRUE;
               }
               break;
+            case kSidebarItemMangaList:
+              if (GetKeyState(VK_CONTROL) & 0x8000) {
+                if (GetKeyState(VK_SHIFT) & 0x8000) {
+                  DlgMangaList.GoToPreviousTab();
+                } else {
+                  DlgMangaList.GoToNextTab();
+                }
+                return TRUE;
+              }
+              break;
           }
           break;
         }
@@ -538,6 +549,9 @@ BOOL MainDialog::PreTranslateMessage(MSG* pMsg) {
       switch (navigation.GetCurrentPage()) {
         case kSidebarItemAnimeList:
           return DlgAnimeList.SendMessage(
+            pMsg->message, pMsg->wParam, pMsg->lParam);
+        case kSidebarItemMangaList:
+          return DlgMangaList.SendMessage(
             pMsg->message, pMsg->wParam, pMsg->lParam);
         case kSidebarItemHistory:
           return DlgHistory.SendMessage(
@@ -807,6 +821,7 @@ void MainDialog::UpdateControlPositions(const SIZE* size) {
 
   // Resize content
   DlgAnimeList.SetPosition(nullptr, rect_content_);
+  DlgMangaList.SetPosition(nullptr, rect_content_);
   DlgHistory.SetPosition(nullptr, rect_content_);
   DlgNowPlaying.SetPosition(nullptr, rect_content_);
   DlgSearch.SetPosition(nullptr, rect_content_);
@@ -916,6 +931,7 @@ void MainDialog::Navigation::SetCurrentPage(int page, bool add_to_history) {
   switch (current_page_) {
     DISPLAY_PAGE(kSidebarItemNowPlaying, DlgNowPlaying, IDD_ANIME_INFO);
     DISPLAY_PAGE(kSidebarItemAnimeList, DlgAnimeList, IDD_ANIME_LIST);
+    DISPLAY_PAGE(kSidebarItemMangaList, DlgMangaList, IDD_MANGA_LIST);
     DISPLAY_PAGE(kSidebarItemHistory, DlgHistory, IDD_HISTORY);
     DISPLAY_PAGE(kSidebarItemStats, DlgStats, IDD_STATS);
     DISPLAY_PAGE(kSidebarItemSearch, DlgSearch, IDD_SEARCH);
@@ -926,6 +942,7 @@ void MainDialog::Navigation::SetCurrentPage(int page, bool add_to_history) {
 
   if (current_page_ != kSidebarItemNowPlaying) DlgNowPlaying.Hide();
   if (current_page_ != kSidebarItemAnimeList) DlgAnimeList.Hide();
+  if (current_page_ != kSidebarItemMangaList) DlgMangaList.Hide();
   if (current_page_ != kSidebarItemHistory) DlgHistory.Hide();
   if (current_page_ != kSidebarItemStats) DlgStats.Hide();
   if (current_page_ != kSidebarItemSearch) DlgSearch.Hide();
@@ -967,6 +984,7 @@ void MainDialog::Navigation::RefreshSearchText(int previous_page) {
   std::wstring cue_text;
   switch (current_page_) {
     case kSidebarItemAnimeList:
+    case kSidebarItemMangaList:
     case kSidebarItemSeasons:
       parent->search_bar.mode = SearchMode::Service;
       cue_text = L"Filter list or search " + sync::GetCurrentServiceName();
@@ -987,6 +1005,7 @@ void MainDialog::Navigation::RefreshSearchText(int previous_page) {
 
   switch (current_page_) {
     case kSidebarItemAnimeList:
+    case kSidebarItemMangaList:
     case kSidebarItemSeasons:
     case kSidebarItemSearch:
     case kSidebarItemFeeds:

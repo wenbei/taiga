@@ -202,13 +202,14 @@ void ParseMediaTitleObject(const Json& json, anime::Item& anime_item) {
 
 int ParseMediaObject(const Json& json) {
   const auto anime_id = JsonReadInt(json, "id");
+  const auto media_type = StrToWstr(JsonReadStr(json, "type"));
 
   if (!anime_id) {
     LOGW(L"Could not parse anime object:\n{}", StrToWstr(json.dump()));
     return anime::ID_UNKNOWN;
   }
 
-  auto& anime_item = anime::db.items[anime_id];
+  anime::Item anime_item;
 
   anime_item.SetSource(ServiceId::AniList);
   anime_item.SetId(ToWstr(anime_id), ServiceId::AniList);
@@ -220,7 +221,11 @@ int ParseMediaObject(const Json& json) {
       anime::NormalizeSynopsis(StrToWstr(JsonReadStr(json, "description"))));
   anime_item.SetDateStart(TranslateFuzzyDateFrom(json["startDate"]));
   anime_item.SetDateEnd(TranslateFuzzyDateFrom(json["endDate"]));
-  anime_item.SetEpisodeCount(JsonReadInt(json, "episodes"));
+  if (IsEqual(media_type, L"ANIME")) {
+    anime_item.SetEpisodeCount(JsonReadInt(json, "episodes"));
+  } else {
+    anime_item.SetEpisodeCount(JsonReadInt(json, "chapters"));
+  }
   anime_item.SetEpisodeLength(JsonReadInt(json, "duration"));
   anime_item.SetImageUrl(StrToWstr(JsonReadStr(json["coverImage"], "large")));
   anime_item.SetScore(
@@ -259,7 +264,13 @@ int ParseMediaObject(const Json& json) {
     }
   }
 
-  Meow.UpdateTitles(anime_item);
+
+   if (IsEqual(media_type, L"ANIME")) {
+     anime::db.items[anime_id] = anime_item;
+     Meow.UpdateTitles(anime_item);
+  } else {
+     anime::db.items_manga[anime_id] = anime_item;
+  }
 
   return anime_id;
 }
@@ -276,6 +287,41 @@ int ParseMediaListObject(const Json& json) {
   ParseMediaObject(json["media"]);
 
   auto& anime_item = anime::db.items[anime_id];
+
+  anime_item.AddtoUserList();
+  anime_item.SetMyId(ToWstr(library_id));
+
+  const auto status = JsonReadStr(json, "status");
+  if (status == kRepeatingMediaListStatus) {
+    anime_item.SetMyStatus(anime::MyStatus::Watching);
+    anime_item.SetMyRewatching(true);
+  } else {
+    anime_item.SetMyStatus(TranslateMyStatusFrom(status));
+  }
+
+  anime_item.SetMyScore(JsonReadInt(json, "score"));
+  anime_item.SetMyLastWatchedEpisode(JsonReadInt(json, "progress"));
+  anime_item.SetMyRewatchedTimes(JsonReadInt(json, "repeat"));
+  anime_item.SetMyNotes(StrToWstr(JsonReadStr(json, "notes")));
+  anime_item.SetMyDateStart(TranslateFuzzyDateFrom(json["startedAt"]));
+  anime_item.SetMyDateEnd(TranslateFuzzyDateFrom(json["completedAt"]));
+  anime_item.SetMyLastUpdated(ToWstr(JsonReadInt(json, "updatedAt")));
+
+  return anime_id;
+}
+
+int ParseMediaListObjectManga(const Json& json) {
+  const auto anime_id = JsonReadInt(json["media"], "id");
+  const auto library_id = JsonReadInt(json, "id");
+
+  if (!anime_id) {
+    LOGW(L"Could not parse library entry #{}", library_id);
+    return anime::ID_UNKNOWN;
+  }
+
+  ParseMediaObject(json["media"]);
+
+  auto& anime_item = anime::db.items_manga[anime_id];
 
   anime_item.AddtoUserList();
   anime_item.SetMyId(ToWstr(library_id));
@@ -410,11 +456,19 @@ void GetLibraryEntries() {
 
     anime::db.ClearUserData();
 
-    const auto& lists = root["data"]["MediaListCollection"]["lists"];
+    const auto& lists = root["data"]["anime"]["lists"];
     for (const auto& list : lists) {
       const auto& entries = list["entries"];
       for (const auto& entry : entries) {
         ParseMediaListObject(entry);
+      }
+    }
+
+    const auto& lists_manga = root["data"]["manga"]["lists"];
+    for (const auto& list : lists_manga) {
+      const auto& entries = list["entries"];
+      for (const auto& entry : entries) {
+        ParseMediaListObjectManga(entry);
       }
     }
 
@@ -609,7 +663,21 @@ void UpdateLibraryEntry(const library::QueueItem& queue_item) {
     {"mediaId", queue_item.anime_id},
   };
 
-  if (const auto anime_item = anime::db.Find(queue_item.anime_id)) {
+  if (queue_item.series_type == anime::SeriesType::Manga) {
+    variables["type"] = "MANGA";
+  } else {
+    variables["type"] = "ANIME";
+  };
+
+  anime::Item* anime_item;
+  if (queue_item.series_type == anime::SeriesType::Manga) {
+    anime_item = anime::db.FindManga(queue_item.anime_id);
+  }
+  else {
+    anime_item = anime::db.Find(queue_item.anime_id);
+  }
+
+  if (anime_item) {
     if (const auto library_id = ToInt(anime_item->GetMyId())) {
       variables["id"] = library_id;
     }
@@ -641,7 +709,7 @@ void UpdateLibraryEntry(const library::QueueItem& queue_item) {
                       L"AniList: Updating anime list...");
   };
 
-  const auto on_response = [id](const taiga::http::Response& response) {
+  const auto on_response = [id, &queue_item](const taiga::http::Response& response) {
     if (HasError(response)) {
       auto error_description = StrToWstr(response.error().str());
       if (response.status_code() == 404) {
@@ -660,7 +728,12 @@ void UpdateLibraryEntry(const library::QueueItem& queue_item) {
       return;
     }
 
-    ParseMediaListObject(root["data"]["SaveMediaListEntry"]);
+    if (queue_item.series_type == anime::SeriesType::Manga) {
+      ParseMediaListObjectManga(root["data"]["SaveMediaListEntry"]);
+    }
+    else {
+      ParseMediaListObject(root["data"]["SaveMediaListEntry"]);
+    }
 
     sync::OnResponse(RequestType::UpdateLibraryEntry);
   };

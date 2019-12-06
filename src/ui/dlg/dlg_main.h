@@ -50,6 +50,7 @@ enum SidebarItems {
   kSidebarItemNowPlaying,
   kSidebarItemSeparator1,
   kSidebarItemAnimeList,
+  kSidebarItemMangaList,
   kSidebarItemHistory,
   kSidebarItemStats,
   kSidebarItemSeparator2,

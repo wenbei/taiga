@@ -350,6 +350,7 @@ void AddToQueue(const Item& item, const Episode& episode, bool change_status) {
   // Create history item
   library::QueueItem queue_item;
   queue_item.anime_id = item.GetId();
+  queue_item.series_type = item.GetType();
 
   // Set episode number
   queue_item.episode = GetEpisodeHigh(episode);

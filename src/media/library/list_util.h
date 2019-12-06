@@ -24,4 +24,8 @@ void ChangeEpisode(int anime_id, int value);
 void DecrementEpisode(int anime_id);
 void IncrementEpisode(int anime_id);
 
+void ChangeChapter(int anime_id, int value);
+void DecrementChapter(int anime_id);
+void IncrementChapter(int anime_id);
+
 }  // namespace anime

@@ -75,4 +75,54 @@ void IncrementEpisode(int anime_id) {
   ChangeEpisode(anime_id, watched + 1);
 }
 
+void ChangeChapter(int anime_id, int value) {
+  const auto anime_item = anime::db.FindManga(anime_id);
+
+  if (!anime_item)
+    return;
+
+  if (!IsValidEpisodeNumber(value, anime_item->GetEpisodeCount()))
+    return;
+
+  Episode episode;
+  episode.set_episode_number(value);
+
+  // Allow changing the status to Completed
+  const bool change_status =
+    value == anime_item->GetEpisodeCount() && value > 0;
+
+  AddToQueue(*anime_item, episode, change_status);
+}
+
+void DecrementChapter(int anime_id) {
+  const auto anime_item = anime::db.FindManga(anime_id);
+
+  if (!anime_item)
+    return;
+
+  const int watched = anime_item->GetMyLastWatchedEpisode();
+  const auto queue_item = library::queue.FindItem(
+    anime_item->GetId(), library::QueueSearch::Episode);
+
+  if (queue_item && *queue_item->episode == watched &&
+    watched > anime_item->GetMyLastWatchedEpisode(false)) {
+    queue_item->enabled = false;
+    library::queue.RemoveDisabled();
+    return;
+  }
+
+  ChangeChapter(anime_id, watched - 1);
+}
+
+void IncrementChapter(int anime_id) {
+  const auto anime_item = anime::db.FindManga(anime_id);
+
+  if (!anime_item)
+    return;
+
+  const int watched = anime_item->GetMyLastWatchedEpisode();
+
+  ChangeChapter(anime_id, watched + 1);
+}
+
 }  // namespace anime

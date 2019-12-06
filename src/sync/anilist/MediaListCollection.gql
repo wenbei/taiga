@@ -1,5 +1,12 @@
 query ($userName: String!) {
-  MediaListCollection (userName: $userName, type: ANIME) {
+  anime:MediaListCollection (userName: $userName, type: ANIME) {
+    lists {
+      entries {
+        ...mediaListFragment
+      }
+    }
+  }
+  manga:MediaListCollection (userName: $userName, type: MANGA) {
     lists {
       entries {
         ...mediaListFragment

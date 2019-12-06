@@ -181,7 +181,12 @@ void HistoryDialog::RefreshList() {
 
   // Add queued items
   for (auto it = library::queue.items.crbegin(); it != library::queue.items.crend(); ++it) {
-    auto anime_item = anime::db.Find(it->anime_id);
+    anime::Item* anime_item;
+    if (it->series_type == anime::SeriesType::Manga) {
+      anime_item = anime::db.FindManga(it->anime_id);
+    } else {
+      anime_item = anime::db.Find(it->anime_id);
+    }
     if (!anime_item) {
       LOGE(L"Item does not exist in the database: {}", it->anime_id);
       continue;
@@ -228,7 +233,12 @@ void HistoryDialog::RefreshList() {
 
   // Add recently watched
   for (auto it = library::history.items.crbegin(); it != library::history.items.crend(); ++it) {
-    auto anime_item = anime::db.Find(it->anime_id);
+    anime::Item* anime_item;
+    if (it->series_type == anime::SeriesType::Manga) {
+      anime_item = anime::db.FindManga(it->anime_id);
+    } else {
+      anime_item = anime::db.Find(it->anime_id);
+    }
     if (!anime_item) {
       LOGE(L"Item does not exist in the database: {}", it->anime_id);
       continue;

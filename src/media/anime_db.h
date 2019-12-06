@@ -43,6 +43,7 @@ public:
   bool SaveDatabase() const;
 
   Item* Find(int id, bool log_error = true);
+  Item* FindManga(int id, bool log_error = true);
   Item* Find(const std::wstring& id, sync::ServiceId service,
              bool log_error = true);
 
@@ -54,18 +55,23 @@ public:
   bool SaveList(bool include_database = false) const;
 
   int GetItemCount(MyStatus status, bool check_history = true);
+  int GetItemCountManga(MyStatus status, bool check_history = true);
 
   void AddToList(int anime_id, MyStatus status);
+  void AddToListManga(int anime_id, MyStatus status);
   void ClearUserData();
   bool DeleteListItem(int anime_id);
   void UpdateItem(const library::QueueItem& queue_item);
 
 public:
   std::map<int, Item> items;
+  std::map<int, Item> items_manga;
 
 private:
   void ReadDatabaseNode(pugi::xml_node& database_node);
   void WriteDatabaseNode(pugi::xml_node& database_node) const;
+  void ReadDatabaseNodeManga(pugi::xml_node& database_node);
+  void WriteDatabaseNodeManga(pugi::xml_node& database_node) const;
 
   void HandleCompatibility(const std::wstring& meta_version);
   void HandleListCompatibility(const std::wstring& meta_version);

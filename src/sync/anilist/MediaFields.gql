@@ -1,4 +1,5 @@
 id
+type
 title {
   romaji(stylised: true)
   english(stylised: true)
@@ -9,6 +10,7 @@ format
 description
 startDate { year month day }
 endDate { year month day }
+chapters
 episodes
 duration
 countryOfOrigin

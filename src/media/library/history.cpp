@@ -60,15 +60,26 @@ bool History::Load() {
   for (auto item : node_items.children(L"item")) {
     HistoryItem history_item;
     history_item.anime_id = item.attribute(L"anime_id").as_int(anime::ID_NOTINLIST);
+    history_item.series_type = static_cast<anime::SeriesType>(item.attribute(L"series_type").as_int());
     history_item.episode = item.attribute(L"episode").as_int();
     history_item.time = item.attribute(L"time").value();
 
-    if (anime::db.Find(history_item.anime_id)) {
-      items.push_back(history_item);
+    if (history_item.series_type == anime::SeriesType::Manga) {
+      if (anime::db.FindManga(history_item.anime_id)) {
+        items.push_back(history_item);
+      } else {
+        LOGW(L"Item does not exist in the database.\n"
+             L"ID: {}\nEpisode: {}\nTime: {}",
+             history_item.anime_id, history_item.episode, history_item.time);
+      }
     } else {
-      LOGW(L"Item does not exist in the database.\n"
-           L"ID: {}\nEpisode: {}\nTime: {}",
-           history_item.anime_id, history_item.episode, history_item.time);
+      if (anime::db.Find(history_item.anime_id)) {
+        items.push_back(history_item);
+      } else {
+        LOGW(L"Item does not exist in the database.\n"
+             L"ID: {}\nEpisode: {}\nTime: {}",
+             history_item.anime_id, history_item.episode, history_item.time);
+      }
     }
   }
   // Queue events
@@ -85,6 +96,7 @@ void History::ReadQueue(const XmlDocument& document) {
     QueueItem queue_item;
 
     queue_item.anime_id = item.attribute(L"anime_id").as_int(anime::ID_NOTINLIST);
+    queue_item.series_type = static_cast<anime::SeriesType>(item.attribute(L"series_type").as_int());
     queue_item.mode = TranslateQueueItemModeFromString(item.attribute(L"mode").value());
     queue_item.time = item.attribute(L"time").value();
 
@@ -112,11 +124,21 @@ void History::ReadQueue(const XmlDocument& document) {
     #undef READ_ATTRIBUTE_STR
     #undef READ_ATTRIBUTE_INT
 
-    if (anime::db.Find(queue_item.anime_id)) {
-      queue.Add(queue_item, false);
+    if (queue_item.series_type == anime::SeriesType::Manga) {
+      if (anime::db.FindManga(queue_item.anime_id)) {
+        queue.Add(queue_item, false);
+      } else {
+        LOGW(L"Item does not exist in the database.\n"
+             L"ID: {}", queue_item.anime_id);
+      }
     } else {
-      LOGW(L"Item does not exist in the database.\n"
-           L"ID: {}", queue_item.anime_id);
+      if (anime::db.Find(queue_item.anime_id)) {
+        queue.Add(queue_item, false);
+      }
+      else {
+        LOGW(L"Item does not exist in the database.\n"
+          L"ID: {}", queue_item.anime_id);
+      }
     }
   }
 }
@@ -134,6 +156,7 @@ bool History::Save() {
   for (const auto& history_item : items) {
     auto node_item = node_items.append_child(L"item");
     node_item.append_attribute(L"anime_id") = history_item.anime_id;
+    node_item.append_attribute(L"series_type") = static_cast<int>(*history_item.series_type);
     node_item.append_attribute(L"episode") = history_item.episode;
     node_item.append_attribute(L"time") = history_item.time.c_str();
   }
@@ -148,6 +171,7 @@ bool History::Save() {
     #define APPEND_ATTRIBUTE_DATE(x, y) \
         if (y) node_item.append_attribute(x) = (*y).to_string().c_str();
     node_item.append_attribute(L"anime_id") = queue_item.anime_id;
+    node_item.append_attribute(L"series_type") = static_cast<int>(*queue_item.series_type);
     node_item.append_attribute(L"mode") =
         TranslateQueueItemModeToString(queue_item.mode).c_str();
     node_item.append_attribute(L"time") = queue_item.time.c_str();

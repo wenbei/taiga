@@ -75,6 +75,41 @@ bool Database::LoadList() {
 
   HandleListCompatibility(meta_version);
 
+ 
+  XmlDocument document_manga;
+  const auto path_manga = taiga::GetPath(taiga::Path::UserLibraryManga);
+  const auto parse_result_manga = XmlLoadFileToDocument(document_manga, path_manga);
+
+  if (!parse_result_manga) {
+    if (parse_result_manga.status != pugi::status_file_not_found) {
+      ui::DisplayErrorMessage(L"Could not read manga list.", path_manga);
+    }
+    return false;
+  }
+
+  auto node_database_manga = document_manga.child(L"database");
+  ReadDatabaseNodeManga(node_database_manga);
+
+  auto node_library_manga = document_manga.child(L"library");
+  for (auto node : node_library_manga.children(L"anime")) {
+    const auto id = XmlReadInt(node, L"id");
+    auto& anime_item = items_manga[id];
+
+    anime_item.AddtoUserList();
+    anime_item.SetMyId(XmlReadStr(node, L"library_id"));
+    anime_item.SetMyLastWatchedEpisode(XmlReadInt(node, L"progress"));
+    anime_item.SetMyDateStart(XmlReadStr(node, L"date_start"));
+    anime_item.SetMyDateEnd(XmlReadStr(node, L"date_end"));
+    anime_item.SetMyScore(XmlReadInt(node, L"score"));
+    anime_item.SetMyStatus(static_cast<MyStatus>(XmlReadInt(node, L"status")));
+    anime_item.SetMyRewatchedTimes(XmlReadInt(node, L"rewatched_times"));
+    anime_item.SetMyRewatching(XmlReadInt(node, L"rewatching"));
+    anime_item.SetMyRewatchingEp(XmlReadInt(node, L"rewatching_ep"));
+    anime_item.SetMyTags(XmlReadStr(node, L"tags"));
+    anime_item.SetMyNotes(XmlReadStr(node, L"notes"));
+    anime_item.SetMyLastUpdated(XmlReadStr(node, L"last_updated"));
+  }
+
   return true;
 }
 
@@ -112,6 +147,40 @@ bool Database::SaveList(bool include_database) const {
   }
 
   const auto path = taiga::GetPath(taiga::Path::UserLibrary);
+
+  
+  XmlDocument document_manga;
+
+  XmlWriteMetaVersion(document_manga, StrToWstr(taiga::version().to_string()));
+
+  if (include_database) {
+    WriteDatabaseNodeManga(XmlChild(document_manga, L"database"));
+  }
+
+  auto node_library_manga = document_manga.append_child(L"library");
+
+  for (const auto& [id, item] : items_manga) {
+    if (item.IsInList()) {
+      auto node = node_library_manga.append_child(L"anime");
+      XmlWriteInt(node, L"id", item.GetId());
+      XmlWriteStr(node, L"library_id", item.GetMyId());
+      XmlWriteInt(node, L"progress", item.GetMyLastWatchedEpisode(false));
+      XmlWriteStr(node, L"date_start", item.GetMyDateStart().to_string());
+      XmlWriteStr(node, L"date_end", item.GetMyDateEnd().to_string());
+      XmlWriteInt(node, L"score", item.GetMyScore(false));
+      XmlWriteInt(node, L"status", static_cast<int>(item.GetMyStatus(false)));
+      XmlWriteInt(node, L"rewatched_times", item.GetMyRewatchedTimes());
+      XmlWriteInt(node, L"rewatching", item.GetMyRewatching(false));
+      XmlWriteInt(node, L"rewatching_ep", item.GetMyRewatchingEp());
+      XmlWriteStr(node, L"tags", item.GetMyTags(false));
+      XmlWriteStr(node, L"notes", item.GetMyNotes(false));
+      XmlWriteStr(node, L"last_updated", item.GetMyLastUpdated());
+    }
+  }
+
+  const auto path_manga = taiga::GetPath(taiga::Path::UserLibraryManga);
+  XmlSaveDocumentToFile(document_manga, path_manga);
+
   return XmlSaveDocumentToFile(document, path);
 }
 
@@ -141,6 +210,39 @@ int Database::GetItemCount(MyStatus status, bool check_history) {
           count++;
         } else {
           auto anime_item = Find(queue_item.anime_id);
+          if (anime_item && status == anime_item->GetMyStatus(false))
+            count--;
+        }
+      }
+    }
+  }
+
+  return count;
+}
+
+int Database::GetItemCountManga(MyStatus status, bool check_history) {
+  // Get current count
+  int count = 0;
+  for (const auto& it : items_manga) {
+    const auto& item = it.second;
+    if (item.GetMyRewatching()) {
+      if (status == MyStatus::Watching)
+        ++count;
+    } else {
+      if (item.GetMyStatus(false) == status)
+        ++count;
+    }
+  }
+
+  // Search queued items for status changes
+  if (check_history) {
+    for (const auto& queue_item : library::queue.items) {
+      if (queue_item.status ||
+          queue_item.mode == library::QueueItemMode::Delete) {
+        if (status == *queue_item.status) {
+          count++;
+        } else {
+          auto anime_item = FindManga(queue_item.anime_id);
           if (anime_item && status == anime_item->GetMyStatus(false))
             count--;
         }
@@ -192,8 +294,51 @@ void Database::AddToList(int anime_id, MyStatus status) {
     CurrentEpisode.Set(anime::ID_UNKNOWN);
 }
 
+void Database::AddToListManga(int anime_id, MyStatus status) {
+  auto anime_item = FindManga(anime_id);
+
+  if (!anime_item || anime_item->IsInList())
+    return;
+
+  if (taiga::GetCurrentUsername().empty()) {
+    ui::ChangeStatusText(
+      L"Please set up your account before adding anime to your list.");
+    return;
+  }
+
+  if (status == anime::MyStatus::NotInList)
+    status = anime::IsAiredYet(*anime_item) ? anime::MyStatus::Watching :
+    anime::MyStatus::PlanToWatch;
+
+  anime_item->AddtoUserList();
+
+  library::QueueItem queue_item;
+  queue_item.anime_id = anime_id;
+  queue_item.status = status;
+  if (status == anime::MyStatus::Completed) {
+    queue_item.episode = anime_item->GetEpisodeCount();
+    if (anime_item->GetEpisodeCount() == 1)
+      queue_item.date_start = GetDate();
+    queue_item.date_finish = GetDate();
+  }
+  queue_item.mode = library::QueueItemMode::Add;
+  library::queue.Add(queue_item);
+
+  SaveDatabase();
+  SaveList();
+
+  ui::OnLibraryEntryAdd(anime_id);
+
+  if (CurrentEpisode.anime_id == anime::ID_NOTINLIST)
+    CurrentEpisode.Set(anime::ID_UNKNOWN);
+}
+
 void Database::ClearUserData() {
   for (auto& [id, item] : items) {
+    item.RemoveFromUserList();
+  }
+
+  for (auto& [id, item] : items_manga) {
     item.RemoveFromUserList();
   }
 }
@@ -219,7 +364,13 @@ bool Database::DeleteListItem(int anime_id) {
 }
 
 void Database::UpdateItem(const library::QueueItem& queue_item) {
-  auto anime_item = Find(queue_item.anime_id);
+  anime::Item* anime_item;
+  if (queue_item.series_type == anime::SeriesType::Manga) {
+    anime_item = anime::db.FindManga(queue_item.anime_id);
+  }
+  else {
+    anime_item = anime::db.Find(queue_item.anime_id);
+  }
 
   if (!anime_item)
     return;

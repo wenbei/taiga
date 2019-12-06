@@ -43,6 +43,7 @@
 #define IDD_TORRENT                     148
 #define IDD_UPDATE                      149
 #define IDD_UPDATE_NEW                  150
+#define IDD_MANGA_LIST                  151
 #define IDC_BUTTON_ADDFOLDER            1000
 #define IDC_BUTTON_ANILIST_AUTH         1001
 #define IDC_BUTTON_BROWSE               1002
@@ -216,15 +217,16 @@
 #define IDC_TREE_MAIN                   1174
 #define IDC_TREE_SECTIONS               1175
 #define IDC_BUTTON_MAL_AUTH             1176
-#define IDC_STATIC                      -1
+#define IDC_LIST_MAIN_MANGA             1176
+#define IDC_TAB_MAIN_MANGA              1177
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        101
+#define _APS_NEXT_RESOURCE_VALUE        103
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           101
+#define _APS_NEXT_CONTROL_VALUE         1002
+#define _APS_NEXT_SYMED_VALUE           103
 #endif
 #endif

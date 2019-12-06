@@ -217,7 +217,12 @@ void DeleteLibraryEntry(const int id) {
 }
 
 void UpdateLibraryEntry(const library::QueueItem& queue_item) {
-  const auto anime_item = anime::db.Find(queue_item.anime_id);
+  anime::Item* anime_item;
+  if (queue_item.series_type == anime::SeriesType::Manga) {
+    anime_item = anime::db.FindManga(queue_item.anime_id);
+  } else {
+    anime_item = anime::db.Find(queue_item.anime_id);
+  }
   if (!anime_item)
     return;
 

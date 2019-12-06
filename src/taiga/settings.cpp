@@ -184,6 +184,19 @@ bool Settings::DeserializeFromXml(const std::wstring& path) {
     }
   }
 
+  // Manga list columns
+  ui::DlgMangaList.listview.InitializeColumns();
+  for (const auto column : node_list_columns.children(L"column")) {
+    const std::wstring name = column.attribute(L"name").value();
+    const auto column_type = ui::MangaListDialog::ListView::TranslateColumnName(name);
+    if (column_type != ui::kColumnUnknown) {
+      auto& data = ui::DlgMangaList.listview.columns[column_type];
+      data.order = column.attribute(L"order").as_int();
+      data.visible = column.attribute(L"visible").as_bool();
+      data.width = column.attribute(L"width").as_int();
+    }
+  }
+
   // Torrent filters
   const auto node_filter = settings.child(L"rss").child(L"torrent").child(L"filter");
   track::feed_filter_manager.Import(node_filter, track::feed_filter_manager.filters);

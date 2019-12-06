@@ -57,6 +57,7 @@ enum Icons16px {
   kIcon16_Clock,
   kIcon16_Home,
   kIcon16_DocumentA,
+  kIcon16_DocumentM,
   kIcon16_Chart,
   kIcon16_Feed,
   kIcon16_Details,

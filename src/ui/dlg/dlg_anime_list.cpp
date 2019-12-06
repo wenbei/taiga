@@ -60,6 +60,7 @@ enum AnimeListTooltips {
 };
 
 AnimeListDialog DlgAnimeList;
+MangaListDialog DlgMangaList;
 
 AnimeListDialog::AnimeListDialog()
     : current_status_(anime::MyStatus::Watching) {
@@ -103,6 +104,59 @@ BOOL AnimeListDialog::OnInitDialog() {
                    static_cast<LPARAM>(status));
     listview.InsertGroup(static_cast<int>(status),
                          ui::TranslateMyStatus(status, false).c_str());
+  }
+
+  // Track mouse leave event for the list view
+  TRACKMOUSEEVENT tme = {0};
+  tme.cbSize = sizeof(TRACKMOUSEEVENT);
+  tme.dwFlags = TME_LEAVE;
+  tme.hwndTrack = listview.GetWindowHandle();
+  TrackMouseEvent(&tme);
+
+  // Refresh
+  RefreshList(anime::MyStatus::Watching);
+  RefreshTabs(anime::MyStatus::Watching);
+
+  // Success
+  return TRUE;
+}
+
+BOOL MangaListDialog::OnInitDialog() {
+  // Create tab control
+  tab.Attach(GetDlgItem(IDC_TAB_MAIN_MANGA));
+
+  // Create main list
+  listview.parent = this;
+  listview.Attach(GetDlgItem(IDC_LIST_MAIN_MANGA));
+  listview.SetExtendedStyle(LVS_EX_COLUMNSNAPPOINTS | LVS_EX_DOUBLEBUFFER |
+                            LVS_EX_FULLROWSELECT | LVS_EX_HEADERDRAGDROP |
+                            LVS_EX_INFOTIP | LVS_EX_LABELTIP |
+                            LVS_EX_TRACKSELECT);
+  listview.SetHoverTime(60 * 1000);
+  listview.SetTheme();
+
+  // Create list tooltips
+  listview.tooltips.Create(listview.GetWindowHandle());
+  listview.tooltips.SetDelayTime(30000, -1, 0);
+  listview.tooltips.SetMaxWidth(
+      ::GetSystemMetrics(SM_CXSCREEN));  // Required for line breaks
+  for (int id = kTooltipFirst; id < kTooltipLast; ++id) {
+    listview.tooltips.AddTip(id, nullptr, nullptr, nullptr, false);
+  }
+
+  // Insert list columns
+  listview.InsertColumns();
+
+  // Insert tabs and list groups
+  listview.InsertGroup(
+      static_cast<int>(anime::MyStatus::NotInList),
+      ui::TranslateMyStatusManga(anime::MyStatus::NotInList, false).c_str());
+  for (const auto status : anime::kMyStatuses) {
+    tab.InsertItem(static_cast<int>(status) - 1,
+                   ui::TranslateMyStatusManga(status, true).c_str(),
+                   static_cast<LPARAM>(status));
+    listview.InsertGroup(static_cast<int>(status),
+                         ui::TranslateMyStatusManga(status, false).c_str());
   }
 
   // Track mouse leave event for the list view
@@ -305,6 +359,190 @@ INT_PTR AnimeListDialog::DialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
   return DialogProcDefault(hwnd, uMsg, wParam, lParam);
 }
 
+INT_PTR MangaListDialog::DialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  switch (uMsg) {
+  case WM_MOUSEMOVE: {
+    // Drag list item
+    if (listview.dragging) {
+      bool allow_drop = false;
+
+      if (tab.HitTest() > -1)
+        allow_drop = true;
+
+      if (!allow_drop) {
+        POINT pt;
+        GetCursorPos(&pt);
+        win::Rect rect_edit;
+        DlgMain.edit.GetWindowRect(&rect_edit);
+        if (rect_edit.PtIn(pt))
+          allow_drop = true;
+      }
+
+      if (!allow_drop) {
+        TVHITTESTINFO ht = { 0 };
+        DlgMain.treeview.HitTest(&ht, true);
+        if (ht.flags & TVHT_ONITEM) {
+          int index = DlgMain.treeview.GetItemData(ht.hItem);
+          switch (index) {
+          case kSidebarItemSearch:
+          case kSidebarItemFeeds:
+            allow_drop = true;
+            break;
+          }
+        }
+      }
+
+      POINT pt;
+      GetCursorPos(&pt);
+      ::ScreenToClient(DlgMain.GetWindowHandle(), &pt);
+      win::Rect rect_header;
+      ::GetClientRect(listview.GetHeader(), &rect_header);
+      listview.drag_image.DragMove(pt.x + (GetSystemMetrics(SM_CXCURSOR) / 2),
+        pt.y + rect_header.Height());
+      SetSharedCursor(allow_drop ? IDC_ARROW : IDC_NO);
+    }
+    break;
+  }
+
+  case WM_LBUTTONUP: {
+    // Drop list item
+    if (listview.dragging) {
+      listview.drag_image.DragLeave(DlgMain.GetWindowHandle());
+      listview.drag_image.EndDrag();
+      listview.drag_image.Destroy();
+      listview.dragging = false;
+      ReleaseCapture();
+
+      int anime_id = GetCurrentId();
+      auto anime_ids = GetCurrentIds();
+      auto anime_item = GetCurrentItem();
+      if (!anime_item)
+        break;
+
+      int tab_index = tab.HitTest();
+      if (tab_index > -1) {
+        int status = tab.GetItemParam(tab_index);
+        if (anime_item->IsInList()) {
+          ExecuteCommand(L"EditStatus({})"_format(status), 0,
+            reinterpret_cast<LPARAM>(&anime_ids));
+        }
+        else {
+          for (const auto& id : anime_ids) {
+            anime::db.AddToListManga(id, static_cast<anime::MyStatus>(status));
+          }
+        }
+        break;
+      }
+
+      const auto text = anime::GetPreferredTitle(*anime_item);
+
+      POINT pt;
+      GetCursorPos(&pt);
+      win::Rect rect_edit;
+      DlgMain.edit.GetWindowRect(&rect_edit);
+      if (rect_edit.PtIn(pt)) {
+        DlgMain.edit.SetText(text);
+        break;
+      }
+
+      TVHITTESTINFO ht = { 0 };
+      DlgMain.treeview.HitTest(&ht, true);
+      if (ht.flags & TVHT_ONITEM) {
+        int index = DlgMain.treeview.GetItemData(ht.hItem);
+        switch (index) {
+        case kSidebarItemSearch:
+          ExecuteCommand(L"SearchAnime({})"_format(text));
+          break;
+        case kSidebarItemFeeds:
+          DlgTorrent.Search(taiga::settings.GetTorrentDiscoverySearchUrl(), anime_id);
+          break;
+        }
+      }
+    }
+    break;
+  }
+
+  case WM_MEASUREITEM: {
+    if (wParam == IDC_LIST_MAIN_MANGA) {
+      auto mis = reinterpret_cast<MEASUREITEMSTRUCT*>(lParam);
+      mis->itemHeight = 48;
+      return TRUE;
+    }
+    break;
+  }
+
+  case WM_DRAWITEM: {
+    if (wParam == IDC_LIST_MAIN_MANGA) {
+      auto dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+      win::Dc dc = dis->hDC;
+      win::Rect rect = dis->rcItem;
+
+      int anime_id = dis->itemData;
+      auto anime_item = anime::db.FindManga(anime_id);
+      if (!anime_item)
+        return TRUE;
+
+      if ((dis->itemState & ODS_SELECTED) == ODS_SELECTED)
+        dc.FillRect(rect, ui::kColorLightBlue);
+      rect.Inflate(-2, -2);
+      dc.FillRect(rect, ui::kColorLightGray);
+
+      // Draw image
+      win::Rect rect_image = rect;
+      rect_image.right = rect_image.left + static_cast<int>(rect_image.Height() / 1.4);
+      dc.FillRect(rect_image, ui::kColorGray);
+      if (const auto image = ui::image_db.GetImage(anime_id)) {
+        int sbm = dc.SetStretchBltMode(HALFTONE);
+        dc.StretchBlt(rect_image.left, rect_image.top,
+          rect_image.Width(), rect_image.Height(),
+          image->dc.Get(), 0, 0,
+          image->rect.Width(),
+          image->rect.Height(),
+          SRCCOPY);
+        dc.SetStretchBltMode(sbm);
+      }
+
+      // Draw title
+      rect.left += rect_image.Width() + 8;
+      int bk_mode = dc.SetBkMode(TRANSPARENT);
+      const auto& title = anime::GetPreferredTitle(*anime_item);
+      dc.AttachFont(ui::Theme.GetHeaderFont());
+      dc.DrawText(title.c_str(), title.length(), rect,
+        DT_END_ELLIPSIS | DT_NOPREFIX | DT_SINGLELINE);
+      dc.DetachFont();
+
+      // Draw second line of information
+      rect.top += 20;
+      COLORREF text_color = dc.SetTextColor(::GetSysColor(COLOR_GRAYTEXT));
+      std::wstring text = ToWstr(anime_item->GetMyLastWatchedEpisode()) + L"/" +
+        ToWstr(anime_item->GetEpisodeCount());
+      dc.DrawText(text.c_str(), -1, rect,
+        DT_END_ELLIPSIS | DT_NOPREFIX | DT_SINGLELINE);
+      dc.SetTextColor(text_color);
+      dc.SetBkMode(bk_mode);
+
+      // Draw progress bar
+      rect.left -= 2;
+      rect.top += 12;
+      rect.bottom = rect.top + 12;
+      rect.right -= 8;
+      listview.DrawProgressBar(dc.Get(), &rect, dis->itemID, *anime_item);
+
+      dc.DetachDc();
+      return TRUE;
+    }
+    break;
+  }
+
+                    // Forward mouse wheel messages to the list
+  case WM_MOUSEWHEEL: {
+    return listview.SendMessage(uMsg, wParam, lParam);
+  }
+  }
+
+  return DialogProcDefault(hwnd, uMsg, wParam, lParam);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 void AnimeListDialog::OnContextMenu(HWND hwnd, POINT pt) {
@@ -356,6 +594,19 @@ LRESULT AnimeListDialog::OnNotify(int idCtrl, LPNMHDR pnmh) {
 
   // Tab control
   } else if (idCtrl == IDC_TAB_MAIN) {
+    return OnTabNotify(reinterpret_cast<LPARAM>(pnmh));
+  }
+
+  return 0;
+}
+
+LRESULT MangaListDialog::OnNotify(int idCtrl, LPNMHDR pnmh) {
+  // ListView control
+  if (idCtrl == IDC_LIST_MAIN_MANGA || pnmh->hwndFrom == listview.GetHeader()) {
+    return OnListNotify(reinterpret_cast<LPARAM>(pnmh));
+
+    // Tab control
+  } else if (idCtrl == IDC_TAB_MAIN_MANGA) {
     return OnTabNotify(reinterpret_cast<LPARAM>(pnmh));
   }
 
@@ -471,7 +722,11 @@ void AnimeListDialog::ListView::SortFromSettings() {
   set_options(TranslateColumnName(taiga::settings.GetAppListSortColumnSecondary()),
               taiga::settings.GetAppListSortOrderSecondary(), true);
 
-  win::ListView::Sort(ui::AnimeListCompareProc);
+  if (parent == &DlgAnimeList) {
+    win::ListView::Sort(ui::AnimeListCompareProc);
+  } else {
+    win::ListView::Sort(ui::MangaListCompareProc);
+  }
 
   parent->RebuildIdCache();
 }
@@ -554,7 +809,12 @@ void AnimeListDialog::ListView::RefreshItem(int index) {
   }
 
   int anime_id = GetItemParam(index);
-  auto anime_item = anime::db.Find(anime_id);
+  anime::Item* anime_item;
+  if (parent == &DlgAnimeList) {
+    anime_item = anime::db.Find(anime_id);
+  } else {
+    anime_item = anime::db.FindManga(anime_id);
+  }
 
   if (!anime_item || !anime_item->IsInList())
     return;
@@ -886,6 +1146,265 @@ LRESULT AnimeListDialog::OnListNotify(LPARAM lParam) {
                 std::vector<std::wstring> anime_titles;
                 for (const auto id : anime_ids) {
                   const auto anime_item = anime::db.Find(id);
+                  if (anime_item)
+                    anime_titles.push_back(anime::GetPreferredTitle(*anime_item));
+                }
+                if (!anime_titles.empty()) {
+                  const auto str = Join(anime_titles, L"\r\n");
+                  win::Clipboard clipboard(DlgMain.GetWindowHandle());
+                  clipboard.Empty();
+                  clipboard.SetText(str);
+                }
+              }
+              return TRUE;
+            // Open folder
+            } else if (pnkd->wVKey == 'O') {
+              ExecuteCommand(L"OpenFolder", 0, anime_id);
+              return TRUE;
+            // Play next episode
+            } else if (pnkd->wVKey == 'N') {
+              track::PlayNextEpisode(anime_id);
+              return TRUE;
+            // Play random episode
+            } else if (pnkd->wVKey == 'R') {
+              track::PlayRandomEpisode(anime_id);
+              return TRUE;
+            }
+          }
+          break;
+        }
+      }
+      break;
+    }
+
+    // Header drag & drop
+    case HDN_ENDDRAG: {
+      auto nmh = reinterpret_cast<LPNMHEADER>(lParam);
+      if (nmh->pitem->iOrder == -1)
+        return TRUE;
+      listview.RefreshItem(-1);
+      listview.MoveColumn(nmh->iItem, nmh->pitem->iOrder);
+      break;
+    }
+    // Header resize
+    case HDN_ITEMCHANGING: {
+      auto nmh = reinterpret_cast<LPNMHEADER>(lParam);
+      auto column_type = listview.FindColumnAtSubItemIndex(nmh->iItem);
+      if (column_type == kColumnAnimeStatus)
+        return TRUE;
+      listview.RefreshItem(-1);
+      break;
+    }
+    case HDN_ITEMCHANGED: {
+      auto nmh = reinterpret_cast<LPNMHEADER>(lParam);
+      listview.SetColumnSize(nmh->iItem, nmh->pitem->cxy);
+      break;
+    }
+
+    // Custom draw
+    case NM_CUSTOMDRAW: {
+      return OnListCustomDraw(lParam);
+    }
+  }
+
+  return 0;
+}
+
+LRESULT MangaListDialog::OnListNotify(LPARAM lParam) {
+  LPNMHDR pnmh = reinterpret_cast<LPNMHDR>(lParam);
+
+  switch (pnmh->code) {
+    // Item drag
+    case LVN_BEGINDRAG: {
+      auto lplv = reinterpret_cast<LPNMLISTVIEW>(lParam);
+      listview.drag_image.Duplicate(ui::Theme.GetImageList16().GetHandle());
+      if (listview.drag_image.GetHandle()) {
+        int icon_index = ui::kIcon16_DocumentA;
+        int anime_id = listview.GetItemParam(lplv->iItem);
+        auto anime_item = anime::db.FindManga(anime_id);
+        if (anime_item)
+          icon_index = ui::StatusToIcon(anime_item->GetAiringStatus());
+        listview.drag_image.BeginDrag(icon_index, 0, 0);
+        listview.drag_image.DragEnter(DlgMain.GetWindowHandle(),
+                                      lplv->ptAction.x, lplv->ptAction.y);
+        listview.dragging = true;
+        SetCapture();
+      }
+      break;
+    }
+
+    // Scroll
+    case LVN_BEGINSCROLL:
+    case LVN_ENDSCROLL: {
+      listview.RefreshItem(-1);
+      break;
+    }
+
+    // Column click
+    case LVN_COLUMNCLICK: {
+      auto lplv = reinterpret_cast<LPNMLISTVIEW>(lParam);
+      const bool same_column = lplv->iSubItem == listview.GetSortColumn();
+      auto column_type = listview.FindColumnAtSubItemIndex(lplv->iSubItem);
+      int order = listview.GetDefaultSortOrder(column_type);
+      if (same_column)
+        order = listview.GetSortOrder() * -1;
+      listview.Sort(lplv->iSubItem, order, listview.GetSortType(column_type), ui::MangaListCompareProc);
+      RebuildIdCache();
+      if (!same_column) {
+        taiga::settings.SetAppListSortColumnSecondary(taiga::settings.GetAppListSortColumnPrimary());
+        taiga::settings.SetAppListSortOrderSecondary(taiga::settings.GetAppListSortOrderPrimary());
+      }
+      taiga::settings.SetAppListSortColumnPrimary(listview.columns[column_type].key);
+      taiga::settings.SetAppListSortOrderPrimary(order);
+      break;
+    }
+
+    // Item select
+    case LVN_ITEMCHANGED: {
+      auto lplv = reinterpret_cast<LPNMLISTVIEW>(lParam);
+      auto anime_id = static_cast<int>(lplv->lParam);
+      if (lplv->uNewState)
+        listview.RefreshItem(lplv->iItem);
+      break;
+    }
+
+    // Item hover
+    case LVN_HOTTRACK: {
+      auto lplv = reinterpret_cast<LPNMLISTVIEW>(lParam);
+      listview.RefreshItem(lplv->iItem);
+      break;
+    }
+
+    // Double click
+    case NM_DBLCLK: {
+      if (listview.GetSelectedCount() > 0) {
+        bool on_button = false;
+        int anime_id = GetCurrentId();
+        auto lpnmitem = reinterpret_cast<LPNMITEMACTIVATE>(lParam);
+        if (listview.button_visible[0] &&
+            listview.button_rect[0].PtIn(lpnmitem->ptAction)) {
+          anime::DecrementChapter(anime_id);
+          on_button = true;
+        } else if (listview.button_visible[1] &&
+                   listview.button_rect[1].PtIn(lpnmitem->ptAction)) {
+          anime::IncrementChapter(anime_id);
+          on_button = true;
+        }
+        if (on_button) {
+          int list_index = GetListIndex(GetCurrentId());
+          listview.RefreshItem(list_index);
+          listview.RedrawItems(list_index, list_index, true);
+        } else {
+          const auto command = static_cast<AnimeListAction>(taiga::settings.GetAppListDoubleClickAction());
+          listview.ExecuteCommand(command, anime_id);
+        }
+      }
+      break;
+    }
+
+    // Left click
+    case NM_CLICK: {
+      if (pnmh->hwndFrom == listview.GetWindowHandle()) {
+        if (listview.GetSelectedCount() > 0) {
+          int anime_id = GetCurrentId();
+          auto anime_ids = GetCurrentIds();
+          auto lpnmitem = reinterpret_cast<LPNMITEMACTIVATE>(lParam);
+          if (listview.button_visible[0] &&
+              listview.button_rect[0].PtIn(lpnmitem->ptAction)) {
+            anime::DecrementChapter(anime_id);
+          } else if (listview.button_visible[1] &&
+                     listview.button_rect[1].PtIn(lpnmitem->ptAction)) {
+            anime::IncrementChapter(anime_id);
+          } else if (listview.button_visible[2] &&
+                     listview.button_rect[2].PtIn(lpnmitem->ptAction)) {
+            POINT pt = {listview.button_rect[2].left, listview.button_rect[2].bottom};
+            ClientToScreen(listview.GetWindowHandle(), &pt);
+            ui::Menus.UpdateAnime(GetCurrentItem());
+            ExecuteCommand(ui::Menus.Show(GetWindowHandle(), pt.x, pt.y, L"EditScore"), 0,
+                           reinterpret_cast<LPARAM>(&anime_ids));
+          }
+          int list_index = GetListIndex(GetCurrentId());
+          listview.RefreshItem(list_index);
+          listview.RedrawItems(list_index, list_index, true);
+        }
+      }
+      break;
+    }
+
+    // Text callback
+    case LVN_GETDISPINFO: {
+      NMLVDISPINFO* plvdi = reinterpret_cast<NMLVDISPINFO*>(lParam);
+      auto anime_item = anime::db.FindManga(static_cast<int>(plvdi->item.lParam));
+      if (!anime_item)
+        break;
+      auto column_type = listview.FindColumnAtSubItemIndex(plvdi->item.iSubItem);
+      switch (column_type) {
+        case kColumnAnimeTitle:
+          if (plvdi->item.mask & LVIF_TEXT) {
+            plvdi->item.pszText = const_cast<LPWSTR>(
+                anime::GetPreferredTitle(*anime_item).data());
+          }
+          break;
+      }
+      break;
+    }
+
+    // Key press
+    case LVN_KEYDOWN: {
+      auto pnkd = reinterpret_cast<LPNMLVKEYDOWN>(lParam);
+      int anime_id = GetCurrentId();
+      auto anime_ids = GetCurrentIds();
+      switch (pnkd->wVKey) {
+        // Simulate double-click
+        case VK_RETURN: {
+          if (!anime::IsValidId(anime_id))
+            break;
+          const auto command = static_cast<AnimeListAction>(taiga::settings.GetAppListDoubleClickAction());
+          listview.ExecuteCommand(command, anime_id);
+          break;
+        }
+        // Delete item
+        case VK_DELETE: {
+          if (!anime::IsValidId(anime_id))
+            break;
+          ExecuteCommand(L"EditDelete()", 0, reinterpret_cast<LPARAM>(&anime_ids));
+          return TRUE;
+        }
+        // Various
+        default: {
+          if (GetKeyState(VK_CONTROL) & 0x8000) {
+            // Select all items
+            if (pnkd->wVKey == 'A') {
+              listview.SelectAllItems();
+              return TRUE;
+            }
+
+            if (!anime::IsValidId(anime_id))
+              break;
+
+            // Edit episode
+            if (pnkd->wVKey == VK_ADD || pnkd->wVKey == VK_OEM_PLUS) {
+              anime::IncrementChapter(anime_id);
+              return TRUE;
+            } else if (pnkd->wVKey == VK_SUBTRACT || pnkd->wVKey == VK_OEM_MINUS) {
+              anime::DecrementChapter(anime_id);
+              return TRUE;
+            // Edit score
+            } else if (pnkd->wVKey >= '0' && pnkd->wVKey <= '9') {
+              ExecuteCommand(L"EditScore({})"_format((pnkd->wVKey - '0') * 10), 0,
+                            reinterpret_cast<LPARAM>(&anime_ids));
+              return TRUE;
+            } else if (pnkd->wVKey >= VK_NUMPAD0 && pnkd->wVKey <= VK_NUMPAD9) {
+              ExecuteCommand(L"EditScore({})"_format((pnkd->wVKey - VK_NUMPAD0) * 10), 0,
+                            reinterpret_cast<LPARAM>(&anime_ids));
+              return TRUE;
+            // Copy anime titles to clipboard
+            } else if (pnkd->wVKey == 'C') {
+              const auto anime_ids = GetCurrentIds();
+              if (!anime_ids.empty()) {
+                std::vector<std::wstring> anime_titles;
+                for (const auto id : anime_ids) {
+                  const auto anime_item = anime::db.FindManga(id);
                   if (anime_item)
                     anime_titles.push_back(anime::GetPreferredTitle(*anime_item));
                 }
@@ -1293,11 +1812,135 @@ LRESULT AnimeListDialog::OnListCustomDraw(LPARAM lParam) {
   return CDRF_DODEFAULT;
 }
 
+LRESULT MangaListDialog::OnListCustomDraw(LPARAM lParam) {
+  LPNMLVCUSTOMDRAW pCD = reinterpret_cast<LPNMLVCUSTOMDRAW>(lParam);
+
+  switch (pCD->nmcd.dwDrawStage) {
+    case CDDS_PREPAINT:
+      return CDRF_NOTIFYITEMDRAW;
+    case CDDS_ITEMPREPAINT:
+      // Alternate background color
+      if ((pCD->nmcd.dwItemSpec % 2) && !listview.IsGroupViewEnabled())
+        pCD->clrTextBk = ChangeColorBrightness(GetSysColor(COLOR_WINDOW), -0.03f);
+      return CDRF_NOTIFYSUBITEMDRAW;
+
+    case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+      auto anime_item = anime::db.FindManga(static_cast<int>(pCD->nmcd.lItemlParam));
+      if (!anime_item)
+        break;
+
+      // Change text color
+      pCD->clrText = GetSysColor(COLOR_WINDOWTEXT);
+      auto column_type = listview.FindColumnAtSubItemIndex(pCD->iSubItem);
+      switch (column_type) {
+        case kColumnAnimeRating:
+          if (!anime_item->GetScore())
+            pCD->clrText = GetSysColor(COLOR_GRAYTEXT);
+          break;
+        case kColumnAnimeTitle:
+          if (anime_item->IsNextEpisodeAvailable() &&
+              taiga::settings.GetAppListHighlightNewEpisodes())
+            pCD->clrText = GetSysColor(COLOR_HIGHLIGHT);
+          break;
+        case kColumnUserRating:
+          if (!anime_item->GetMyScore())
+            pCD->clrText = GetSysColor(COLOR_GRAYTEXT);
+          break;
+        case kColumnAnimeSeason:
+          if (!anime::IsValidDate(anime_item->GetDateStart()))
+            pCD->clrText = GetSysColor(COLOR_GRAYTEXT);
+          break;
+        case kColumnUserLastUpdated:
+          if (anime_item->GetMyLastUpdated().empty() ||
+              anime_item->GetMyLastUpdated() == L"0")
+            pCD->clrText = GetSysColor(COLOR_GRAYTEXT);
+          break;
+        case kColumnUserDateStarted:
+          if (!anime::IsValidDate(anime_item->GetMyDateStart()))
+            pCD->clrText = GetSysColor(COLOR_GRAYTEXT);
+          break;
+        case kColumnUserDateCompleted:
+          if (!anime::IsValidDate(anime_item->GetMyDateEnd()))
+            pCD->clrText = GetSysColor(COLOR_GRAYTEXT);
+          break;
+      }
+
+      // Indicate currently playing
+      if (anime_item->GetPlaying()) {
+        pCD->clrTextBk = ui::kColorLightGreen;
+        static HFONT hFontDefault = ChangeDCFont(pCD->nmcd.hdc, nullptr, -1, true, -1, -1);
+        static HFONT hFontBold = reinterpret_cast<HFONT>(GetCurrentObject(pCD->nmcd.hdc, OBJ_FONT));
+        SelectObject(pCD->nmcd.hdc, column_type == kColumnAnimeTitle ? hFontBold : hFontDefault);
+        return CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT;
+      }
+
+      return CDRF_NOTIFYPOSTPAINT;
+    }
+
+    case CDDS_ITEMPOSTPAINT | CDDS_SUBITEM: {
+      auto anime_item = anime::db.FindManga(static_cast<int>(pCD->nmcd.lItemlParam));
+      if (!anime_item)
+        break;
+
+      auto column_type = listview.FindColumnAtSubItemIndex(pCD->iSubItem);
+      if (column_type == kColumnAnimeStatus ||
+          column_type == kColumnUserProgress ||
+          column_type == kColumnUserRating) {
+        win::Rect rcItem;
+        listview.GetSubItemRect(pCD->nmcd.dwItemSpec, pCD->iSubItem, &rcItem);
+        if (!rcItem.IsEmpty() && listview.columns[column_type].visible) {
+          // Draw airing status
+          if (column_type == kColumnAnimeStatus) {
+            listview.DrawAiringStatus(pCD->nmcd.hdc, &rcItem, *anime_item);
+
+          // Draw progress bar and text
+          } else if (column_type == kColumnUserProgress) {
+            listview.progress_bars_visible = rcItem.Width() > ScaleX(100);
+            rcItem.Inflate(ScaleX(-4), 0);
+            if (listview.progress_bars_visible) {
+              win::Rect rcBar = rcItem;
+              rcBar.right -= ScaleX(60);
+              rcBar.Inflate(0, ScaleY(-4));
+              listview.DrawProgressBar(pCD->nmcd.hdc, &rcBar, pCD->nmcd.dwItemSpec,
+                                       *anime_item);
+              rcItem.left = rcBar.right;
+            }
+            listview.DrawProgressText(pCD->nmcd.hdc, &rcItem, *anime_item);
+
+          // Draw score box
+          } else if (column_type == kColumnUserRating) {
+            listview.DrawScoreBox(pCD->nmcd.hdc, &rcItem, pCD->nmcd.dwItemSpec,
+                                  pCD->nmcd.uItemState, *anime_item);
+          }
+        }
+      }
+
+      break;
+    }
+  }
+
+  return CDRF_DODEFAULT;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /* Tab control */
 
 LRESULT AnimeListDialog::OnTabNotify(LPARAM lParam) {
+  switch (reinterpret_cast<LPNMHDR>(lParam)->code) {
+    // Tab select
+    case TCN_SELCHANGE: {
+      int tab_index = tab.GetCurrentlySelected();
+      const auto status = static_cast<anime::MyStatus>(tab.GetItemParam(tab_index));
+      RefreshList(status);
+      break;
+    }
+  }
+
+  return 0;
+}
+
+LRESULT MangaListDialog::OnTabNotify(LPARAM lParam) {
   switch (reinterpret_cast<LPNMHDR>(lParam)->code) {
     // Tab select
     case TCN_SELCHANGE: {
@@ -1323,6 +1966,10 @@ std::vector<int> AnimeListDialog::GetCurrentIds() {
 
 anime::Item* AnimeListDialog::GetCurrentItem() {
   return anime::db.Find(GetCurrentId());
+}
+
+anime::Item* MangaListDialog::GetCurrentItem() {
+  return anime::db.FindManga(GetCurrentId());
 }
 
 anime::MyStatus AnimeListDialog::GetCurrentStatus() {
@@ -1423,11 +2070,105 @@ void AnimeListDialog::RefreshList(std::optional<anime::MyStatus> status) {
                         RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
+void MangaListDialog::RefreshList(std::optional<anime::MyStatus> status) {
+  if (!IsWindow())
+    return;
+
+  bool group_view = !DlgMain.search_bar.filters.text[kSidebarItemAnimeList].empty();
+
+  // Remember current position
+  int current_position = -1;
+  if (!status && !group_view)
+    current_position = listview.GetTopIndex() + listview.GetCountPerPage() - 1;
+
+  // Remember current status
+  if (status && *status != anime::MyStatus::NotInList)
+    current_status_ = *status;
+
+  // Disable drawing
+  listview.SetRedraw(FALSE);
+
+  // Clear list
+  listview.DeleteAllItems();
+  listview.RefreshItem(-1);
+
+  // Enable group view
+  listview.EnableGroupView(group_view);
+
+  // Add items to list
+  std::map<anime::MyStatus, int> group_count;
+  int group_index = -1;
+  int i = 0;
+  for (const auto& [anime_id, anime_item] : anime::db.items_manga) {
+    if (!anime_item.IsInList())
+      continue;
+    if (IsDeletedFromList(anime_item))
+      continue;
+    if (!group_view) {
+      if (anime_item.GetMyRewatching()) {
+        if (current_status_ != anime::MyStatus::Watching)
+          continue;
+      } else if (current_status_ != anime_item.GetMyStatus()) {
+        continue;
+      }
+    }
+    if (!DlgMain.search_bar.filters.CheckItem(anime_item, kSidebarItemAnimeList))
+      continue;
+
+    group_count[anime_item.GetMyStatus()]++;
+    group_index = group_view ? static_cast<int>(anime_item.GetMyStatus()) : -1;
+    i = listview.GetItemCount();
+
+    listview.InsertItem(i, group_index, -1,
+                        0, nullptr, LPSTR_TEXTCALLBACK,
+                        static_cast<LPARAM>(anime_item.GetId()));
+    RefreshListItemColumns(i, anime_item);
+  }
+
+  auto timer = taiga::timers.timer(taiga::kTimerAnimeList);
+  if (timer)
+    timer->Reset();
+
+  // Set group headers
+  if (group_view) {
+    for (const auto status : anime::kMyStatuses) {
+      std::wstring text = ui::TranslateMyStatusManga(status, false);
+      text += group_count[status] > 0 ? L" ({})"_format(group_count[status]) : L"";
+      listview.SetGroupText(i, text.c_str());
+    }
+  }
+
+  // Sort items
+  listview.SortFromSettings();
+
+  if (current_position > -1) {
+    if (current_position > listview.GetItemCount() - 1)
+      current_position = listview.GetItemCount() - 1;
+    listview.EnsureVisible(current_position);
+  }
+
+  // Redraw
+  listview.SetRedraw(TRUE);
+  listview.RedrawWindow(nullptr, nullptr,
+                        RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+}
+
 void AnimeListDialog::RefreshListItem(int anime_id) {
   int index = GetListIndex(anime_id);
 
   if (index > -1 && listview.IsItemVisible(index)) {
     auto anime_item = anime::db.Find(anime_id);
+    if (anime_item)
+      RefreshListItemColumns(index, *anime_item);
+    listview.RedrawItems(index, index, true);
+  }
+}
+
+void MangaListDialog::RefreshListItem(int anime_id) {
+  int index = GetListIndex(anime_id);
+
+  if (index > -1 && listview.IsItemVisible(index)) {
+    auto anime_item = anime::db.FindManga(anime_id);
     if (anime_item)
       RefreshListItemColumns(index, *anime_item);
     listview.RedrawItems(index, index, true);
@@ -1505,6 +2246,38 @@ void AnimeListDialog::RefreshTabs(std::optional<anime::MyStatus> status) {
                    RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
+void MangaListDialog::RefreshTabs(std::optional<anime::MyStatus> status) {
+  if (!IsWindow())
+    return;
+
+  // Remember last index
+  if (status && *status != anime::MyStatus::NotInList)
+    current_status_ = *status;
+
+  // Disable drawing
+  tab.SetRedraw(FALSE);
+
+  // Refresh text
+  for (const auto status : anime::kMyStatuses) {
+    tab.SetItemText(static_cast<int>(status) - 1, ui::TranslateMyStatusManga(status, true).c_str());
+  }
+
+  // Select related tab
+  bool group_view = !DlgMain.search_bar.filters.text[kSidebarItemAnimeList].empty();
+  int tab_index = static_cast<int>(current_status_);
+  if (group_view) {
+    tab_index = -1;
+  } else {
+    tab_index--;
+  }
+  tab.SetCurrentlySelected(tab_index);
+
+  // Redraw
+  tab.SetRedraw(TRUE);
+  tab.RedrawWindow(nullptr, nullptr,
+                   RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+}
+
 void AnimeListDialog::GoToPreviousTab() {
   int tab_index = tab.GetCurrentlySelected();
   int tab_count = tab.GetItemCount();
@@ -1522,6 +2295,38 @@ void AnimeListDialog::GoToPreviousTab() {
 }
 
 void AnimeListDialog::GoToNextTab() {
+  int tab_index = tab.GetCurrentlySelected();
+  int tab_count = tab.GetItemCount();
+
+  if (tab_index < tab_count - 1) {
+    ++tab_index;
+  } else {
+    tab_index = 0;
+  }
+
+  tab.SetCurrentlySelected(tab_index);
+
+  const auto status = static_cast<anime::MyStatus>(tab.GetItemParam(tab_index));
+  RefreshList(status);
+}
+
+void MangaListDialog::GoToPreviousTab() {
+  int tab_index = tab.GetCurrentlySelected();
+  int tab_count = tab.GetItemCount();
+
+  if (tab_index > 0) {
+    --tab_index;
+  } else {
+    tab_index = tab_count - 1;
+  }
+
+  tab.SetCurrentlySelected(tab_index);
+
+  const auto status = static_cast<anime::MyStatus>(tab.GetItemParam(tab_index));
+  RefreshList(status);
+}
+
+void MangaListDialog::GoToNextTab() {
   int tab_index = tab.GetCurrentlySelected();
   int tab_count = tab.GetItemCount();
 
@@ -1755,7 +2560,12 @@ void AnimeListDialog::ListView::RefreshLastUpdateColumn() {
   time_t time_now = time(nullptr);
 
   for (int i = 0; i < item_count; ++i) {
-    auto anime_item = anime::db.Find(GetItemParam(i));
+    anime::Item* anime_item;
+    if (parent == &DlgAnimeList) {
+      anime_item = anime::db.Find(GetItemParam(i));
+    } else {
+      anime_item = anime::db.FindManga(GetItemParam(i));
+    }
     if (!anime_item)
       continue;
     time_t time_last_updated = ToTime(anime_item->GetMyLastUpdated());

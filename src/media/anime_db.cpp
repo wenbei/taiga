@@ -52,6 +52,18 @@ bool Database::LoadDatabase() {
 
   HandleCompatibility(meta_version);
 
+
+  const auto path_manga = taiga::GetPath(taiga::Path::DatabaseManga);
+
+  XmlDocument document_manga;
+  const auto parse_result_manga = XmlLoadFileToDocument(document_manga, path_manga, options);
+
+  if (!parse_result_manga)
+    return false;
+
+  auto database_node_manga = document_manga.child(L"database");
+  ReadDatabaseNodeManga(database_node_manga);
+
   return true;
 }
 
@@ -111,6 +123,62 @@ void Database::ReadDatabaseNode(XmlNode& database_node) {
   }
 }
 
+void Database::ReadDatabaseNodeManga(XmlNode& database_node) {
+  for (auto node : database_node.children(L"anime")) {
+    std::map<sync::ServiceId, std::wstring> id_map;
+
+    for (auto id_node : node.children(L"id")) {
+      const std::wstring slug = id_node.attribute(L"name").as_string();
+      const auto service_id = sync::GetServiceIdBySlug(slug);
+      if (service_id != sync::ServiceId::Unknown)
+        id_map[service_id] = id_node.child_value();
+    }
+
+    auto source = sync::GetServiceIdBySlug(XmlReadStr(node, L"source"));
+    if (source == sync::ServiceId::Unknown) {
+      const auto current_service_id = sync::GetCurrentServiceId();
+      if (nstd::contains(id_map, current_service_id)) {
+        source = current_service_id;
+        LOGW(L"Fixed source to {} ({}).", sync::GetCurrentServiceName(),
+             id_map[source]);
+      } else {
+        LOGE(L"Discarding data from unknown source.");
+        continue;
+      }
+    }
+
+    const int id = ToInt(id_map[sync::GetCurrentServiceId()]);
+    Item& item = items_manga[id];  // Creates the item if it doesn't exist
+
+    for (const auto& [service, id] : id_map) {
+      item.SetId(id, service);
+    }
+
+    item.SetSource(source);
+    item.SetTitle(XmlReadStr(node, L"title"));
+    item.SetType(static_cast<SeriesType>(XmlReadInt(node, L"type")));
+    item.SetAiringStatus(static_cast<SeriesStatus>(XmlReadInt(node, L"status")));
+    item.SetAgeRating(static_cast<AgeRating>(XmlReadInt(node, L"age_rating")));
+    item.SetGenres(XmlReadStr(node, L"genres"));
+    item.SetProducers(XmlReadStr(node, L"producers"));
+    item.SetSynopsis(XmlReadStr(node, L"synopsis"));
+    item.SetLastModified(ToTime(XmlReadStr(node, L"modified")));
+    item.SetEnglishTitle(XmlReadStr(node, L"english"));
+    item.SetJapaneseTitle(XmlReadStr(node, L"japanese"));
+    for (auto child_node : node.children(L"synonym")) {
+      item.InsertSynonym(child_node.child_value());
+    }
+    item.SetPopularity(XmlReadInt(node, L"popularity"));
+    item.SetScore(ToDouble(XmlReadStr(node, L"score")));
+    item.SetDateEnd(Date(XmlReadStr(node, L"date_end")));
+    item.SetDateStart(Date(XmlReadStr(node, L"date_start")));
+    item.SetEpisodeLength(XmlReadInt(node, L"episode_length"));
+    item.SetEpisodeCount(XmlReadInt(node, L"episode_count"));
+    item.SetSlug(XmlReadStr(node, L"slug"));
+    item.SetImageUrl(XmlReadStr(node, L"image"));
+  }
+}
+
 bool Database::SaveDatabase() const {
   XmlDocument document;
 
@@ -118,6 +186,15 @@ bool Database::SaveDatabase() const {
   WriteDatabaseNode(XmlChild(document, L"database"));
 
   const auto path = taiga::GetPath(taiga::Path::DatabaseAnime);
+
+  XmlDocument document_manga;
+
+  XmlWriteMetaVersion(document_manga, StrToWstr(taiga::version().to_string()));
+  WriteDatabaseNodeManga(XmlChild(document_manga, L"database"));
+
+  const auto path_manga = taiga::GetPath(taiga::Path::DatabaseManga);
+  XmlSaveDocumentToFile(document_manga, path_manga);
+
   return XmlSaveDocumentToFile(document, path);
 }
 
@@ -176,12 +253,84 @@ void Database::WriteDatabaseNode(XmlNode& database_node) const {
   }
 }
 
+void Database::WriteDatabaseNodeManga(XmlNode& database_node) const {
+  for (const auto& [id, item] : items_manga) {
+    auto anime_node = database_node.append_child(L"anime");
+
+    for (const auto service_id : sync::kServiceIds) {
+      const auto id = item.GetId(service_id);
+      if (!id.empty()) {
+        auto child = anime_node.append_child(L"id");
+        const auto slug = sync::GetServiceSlugById(service_id);
+        child.append_attribute(L"name") = slug.c_str();
+        child.append_child(pugi::node_pcdata).set_value(id.c_str());
+      }
+    }
+
+    const std::wstring source = sync::GetServiceSlugById(
+        static_cast<sync::ServiceId>(item.GetSource()));
+
+#define XML_WC(n, v, t) \
+  if (!v.empty())       \
+  XmlWriteChildNodes(anime_node, v, n, t)
+#define XML_WD(n, v) \
+  if (v)             \
+  XmlWriteStr(anime_node, n, v.to_string())
+#define XML_WI(n, v) \
+  if (v > 0)         \
+  XmlWriteInt(anime_node, n, v)
+#define XML_WS(n, v, t) \
+  if (!v.empty())       \
+  XmlWriteStr(anime_node, n, v, t)
+#define XML_WF(n, v, t) \
+  if (v > 0.0)          \
+  XmlWriteStr(anime_node, n, ToWstr(v), t)
+    XML_WS(L"source", source, pugi::node_pcdata);
+    XML_WS(L"slug", item.GetSlug(), pugi::node_pcdata);
+    XML_WS(L"title", item.GetTitle(), pugi::node_cdata);
+    XML_WS(L"english", item.GetEnglishTitle(), pugi::node_cdata);
+    XML_WS(L"japanese", item.GetJapaneseTitle(), pugi::node_cdata);
+    XML_WC(L"synonym", item.GetSynonyms(), pugi::node_cdata);
+    XML_WI(L"type", static_cast<int>(item.GetType()));
+    XML_WI(L"status", static_cast<int>(item.GetAiringStatus()));
+    XML_WI(L"episode_count", item.GetEpisodeCount());
+    XML_WI(L"episode_length", item.GetEpisodeLength());
+    XML_WD(L"date_start", item.GetDateStart());
+    XML_WD(L"date_end", item.GetDateEnd());
+    XML_WS(L"image", item.GetImageUrl(), pugi::node_pcdata);
+    XML_WI(L"age_rating", static_cast<int>(item.GetAgeRating()));
+    XML_WS(L"genres", Join(item.GetGenres(), L", "), pugi::node_pcdata);
+    XML_WS(L"producers", Join(item.GetProducers(), L", "), pugi::node_pcdata);
+    XML_WF(L"score", item.GetScore(), pugi::node_pcdata);
+    XML_WI(L"popularity", item.GetPopularity());
+    XML_WS(L"synopsis", item.GetSynopsis(), pugi::node_cdata);
+    XML_WS(L"modified", ToWstr(item.GetLastModified()), pugi::node_pcdata);
+#undef XML_WF
+#undef XML_WS
+#undef XML_WI
+#undef XML_WD
+#undef XML_WC
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 Item* Database::Find(int id, bool log_error) {
   if (IsValidId(id)) {
     auto it = items.find(id);
     if (it != items.end())
+      return &it->second;
+    if (log_error)
+      LOGE(L"Could not find ID: {}", id);
+  }
+
+  return nullptr;
+}
+
+Item* Database::FindManga(int id, bool log_error) {
+  if (IsValidId(id)) {
+    auto it = items_manga.find(id);
+    if (it != items_manga.end())
       return &it->second;
     if (log_error)
       LOGE(L"Could not find ID: {}", id);

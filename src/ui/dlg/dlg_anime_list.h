@@ -145,6 +145,29 @@ private:
   anime::MyStatus current_status_;
 };
 
+class MangaListDialog : public AnimeListDialog {
+public:
+  INT_PTR DialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+  BOOL OnInitDialog();
+  LRESULT OnListNotify(LPARAM lParam);
+  LRESULT OnListCustomDraw(LPARAM lParam);
+  LRESULT OnNotify(int idCtrl, LPNMHDR pnmh);
+  LRESULT OnTabNotify(LPARAM lParam);
+
+  anime::Item* GetCurrentItem();
+
+  void RefreshList(std::optional<anime::MyStatus> status = std::nullopt);
+  void RefreshListItem(int anime_id);
+  void RefreshTabs(std::optional<anime::MyStatus> status = std::nullopt);
+
+  void GoToPreviousTab();
+  void GoToNextTab();
+
+private:
+  anime::MyStatus current_status_;
+};
+
 extern AnimeListDialog DlgAnimeList;
+extern MangaListDialog DlgMangaList;
 
 }  // namespace ui

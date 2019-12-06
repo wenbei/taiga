@@ -54,7 +54,8 @@ struct QueueItem {
   QueueItemMode mode = QueueItemMode::Update;
   std::wstring reason;
   std::wstring time;
-
+  
+  std::optional<anime::SeriesType> series_type;
   std::optional<int> episode;
   std::optional<anime::MyStatus> status;
   std::optional<int> score;

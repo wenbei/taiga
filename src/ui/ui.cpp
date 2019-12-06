@@ -120,6 +120,8 @@ void OnLibraryChange() {
 
   DlgAnimeList.RefreshList();
   DlgAnimeList.RefreshTabs();
+  DlgMangaList.RefreshList();
+  DlgMangaList.RefreshTabs();
   DlgHistory.RefreshList();
   DlgSearch.RefreshList();
 
@@ -132,6 +134,8 @@ void OnLibraryEntryAdd(int id) {
 
   DlgAnimeList.RefreshList();
   DlgAnimeList.RefreshTabs();
+  DlgMangaList.RefreshList();
+  DlgMangaList.RefreshTabs();
 
   if (DlgNowPlaying.GetCurrentId() == id)
     DlgNowPlaying.Refresh();
@@ -146,6 +150,9 @@ void OnLibraryEntryChange(int id) {
   if (DlgAnimeList.IsWindow())
     DlgAnimeList.RefreshListItem(id);
 
+  if (DlgMangaList.IsWindow())
+    DlgMangaList.RefreshListItem(id);
+
   if (DlgNowPlaying.GetCurrentId() == id)
     DlgNowPlaying.Refresh(false, true, false, false);
 
@@ -159,6 +166,8 @@ void OnLibraryEntryDelete(int id) {
 
   DlgAnimeList.RefreshList();
   DlgAnimeList.RefreshTabs();
+  DlgMangaList.RefreshList();
+  DlgMangaList.RefreshTabs();
 
   DlgNowPlaying.Refresh(false, false, false, false);
 
@@ -174,6 +183,9 @@ void OnLibraryEntryImageChange(int id) {
 
   if (DlgAnimeList.IsWindow())
     DlgAnimeList.RefreshListItem(id);
+
+  if (DlgMangaList.IsWindow())
+    DlgMangaList.RefreshListItem(id);
 
   if (DlgNowPlaying.GetCurrentId() == id)
     DlgNowPlaying.Refresh(true, false, false, false);
@@ -358,6 +370,8 @@ void OnHistoryAddItem(const library::QueueItem& queue_item) {
   if (AnimeListNeedsRefresh(queue_item)) {
     DlgAnimeList.RefreshList();
     DlgAnimeList.RefreshTabs();
+    DlgMangaList.RefreshList();
+    DlgMangaList.RefreshTabs();
   } else {
     DlgAnimeList.RefreshListItem(queue_item.anime_id);
     if (AnimeListNeedsResort())
@@ -382,6 +396,8 @@ void OnHistoryChange(const library::QueueItem* queue_item) {
   if (!queue_item || AnimeListNeedsRefresh(*queue_item)) {
     DlgAnimeList.RefreshList();
     DlgAnimeList.RefreshTabs();
+    DlgMangaList.RefreshList();
+    DlgMangaList.RefreshTabs();
   } else {
     DlgAnimeList.RefreshListItem(queue_item->anime_id);
     if (AnimeListNeedsResort())
@@ -476,6 +492,8 @@ void OnAnimeDelete(int id, const std::wstring& title) {
 
   DlgAnimeList.RefreshList();
   DlgAnimeList.RefreshTabs();
+  DlgMangaList.RefreshList();
+  DlgMangaList.RefreshTabs();
 
   if (DlgNowPlaying.GetCurrentId() == id) {
     DlgNowPlaying.SetCurrentId(anime::ID_UNKNOWN);
@@ -642,6 +660,7 @@ bool OnSettingsEditAdvanced(const std::wstring& description,
 
 void OnSettingsChange() {
   DlgAnimeList.RefreshList();
+  DlgMangaList.RefreshList();
 }
 
 void OnSettingsLibraryFoldersEmpty() {
@@ -711,6 +730,8 @@ void OnSettingsUserChange() {
   DlgMain.UpdateTitle();
   DlgAnimeList.RefreshList(anime::MyStatus::Watching);
   DlgAnimeList.RefreshTabs(anime::MyStatus::Watching);
+  DlgMangaList.RefreshList(anime::MyStatus::Watching);
+  DlgMangaList.RefreshTabs(anime::MyStatus::Watching);
   DlgHistory.RefreshList();
   DlgNowPlaying.Refresh();
   DlgSearch.RefreshList();

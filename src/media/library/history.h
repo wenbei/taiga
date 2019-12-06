@@ -18,10 +18,12 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/xml.h"
+#include "media/anime.h"
 
 namespace library {
 
@@ -29,6 +31,7 @@ struct HistoryItem {
   int anime_id = 0;
   int episode = 0;
   std::wstring time;
+  std::optional<anime::SeriesType> series_type;
 };
 
 class History {

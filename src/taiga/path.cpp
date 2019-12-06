@@ -66,6 +66,8 @@ std::wstring GetPath(Path path) {
       return data_path + L"db\\anime.xml";
     case Path::DatabaseAnimeRelations:
       return data_path + L"db\\anime-relations.txt";
+    case Path::DatabaseManga:
+      return data_path + L"db\\manga.xml";
     case Path::DatabaseImage:
       return data_path + L"db\\image\\";
     case Path::Feed:
@@ -90,6 +92,8 @@ std::wstring GetPath(Path path) {
       return data_path + L"user\\{}\\history.xml"_format(GetUserDirectoryName());
     case Path::UserLibrary:
       return data_path + L"user\\{}\\anime.xml"_format(GetUserDirectoryName());
+    case Path::UserLibraryManga:
+      return data_path + L"user\\{}\\manga.xml"_format(GetUserDirectoryName());
   }
 }
 

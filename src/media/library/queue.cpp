@@ -63,7 +63,12 @@ static void ValidateQueueItem(QueueItem& item, const anime::Item& anime_item) {
 }
 
 void Queue::Add(QueueItem& item, bool save) {
-  const auto anime_item = anime::db.Find(item.anime_id);
+  anime::Item* anime_item;
+  if (item.series_type == anime::SeriesType::Manga) {
+    anime_item = anime::db.FindManga(item.anime_id);
+  } else {
+    anime_item = anime::db.Find(item.anime_id);
+  }
 
   // Add to user list
   if (anime_item && !anime_item->IsInList())
@@ -170,7 +175,12 @@ void Queue::Check(bool automatic) {
     return;
   }
 
-  auto anime_item = anime::db.Find(items[index].anime_id);
+  anime::Item* anime_item;
+  if (items[index].series_type == anime::SeriesType::Manga) {
+    anime_item = anime::db.FindManga(items[index].anime_id);
+  } else {
+    anime_item = anime::db.Find(items[index].anime_id);
+  }
   if (!anime_item) {
     LOGW(L"Item not found in list, removing... ID: {}", items[index].anime_id);
     Remove(index, true, true, false);
@@ -321,6 +331,7 @@ void Queue::Remove(int index, bool save, bool refresh, bool to_history) {
     if (to_history && queue_item.episode && *queue_item.episode > 0) {
       HistoryItem history_item;
       history_item.anime_id = queue_item.anime_id;
+      history_item.series_type = queue_item.series_type;
       history_item.episode = *queue_item.episode;
       history_item.time = queue_item.time;
       history.items.push_back(history_item);
@@ -331,7 +342,13 @@ void Queue::Remove(int index, bool save, bool refresh, bool to_history) {
     }
 
     if (queue_item.episode) {
-      auto anime_item = anime::db.Find(queue_item.anime_id);
+      anime::Item* anime_item;
+      if (queue_item.series_type == anime::SeriesType::Manga) {
+        anime_item = anime::db.FindManga(queue_item.anime_id);
+      }
+      else {
+        anime_item = anime::db.Find(queue_item.anime_id);
+      }
       if (anime_item &&
           anime_item->GetMyLastWatchedEpisode() == *queue_item.episode) {
         // Next episode path is no longer valid
@@ -384,6 +401,9 @@ void ConfirmationQueue::Process() {
     if (choice != IDNO) {
       bool change_status = (choice == IDCANCEL);
       auto anime_item = anime::db.Find(episode.anime_id);
+      if (!anime_item) {
+        anime_item = anime::db.FindManga(episode.anime_id);
+      }
       if (anime_item)
         AddToQueue(*anime_item, episode, change_status);
     }

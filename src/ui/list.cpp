@@ -307,6 +307,24 @@ int CALLBACK AnimeListCompareProc(LPARAM lParam1, LPARAM lParam2,
   return ListViewCompare(lParam1, lParam2, lParamSort, false);
 }
 
+int CALLBACK MangaListCompareProc(LPARAM lParam1, LPARAM lParam2,
+                                  LPARAM lParamSort) {
+  if (taiga::settings.GetAppListHighlightNewEpisodes() &&
+      taiga::settings.GetAppListDisplayHighlightedOnTop()) {
+    const auto list = reinterpret_cast<win::ListView*>(lParamSort);
+    const auto item1 = anime::db.FindManga(list->GetItemParam(lParam1));
+    const auto item2 = anime::db.FindManga(list->GetItemParam(lParam2));
+    if (item1 && item2) {
+      bool available1 = item1->IsNextEpisodeAvailable();
+      bool available2 = item2->IsNextEpisodeAvailable();
+      if (available1 != available2)
+        return nstd::compare<bool>(!available1, !available2);
+    }
+  }
+
+  return ListViewCompare(lParam1, lParam2, lParamSort, false);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int GetAnimeIdFromSelectedListItem(win::ListView& listview) {

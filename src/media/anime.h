@@ -57,6 +57,8 @@ enum class SeriesType {
   Special,
   Ona,
   Music,
+  Manga,
+  Novel
 };
 
 enum class MyStatus {
@@ -80,13 +82,15 @@ constexpr std::array<SeriesStatus, 3> kSeriesStatuses{
   SeriesStatus::NotYetAired,
 };
 
-constexpr std::array<SeriesType, 6> kSeriesTypes{
+constexpr std::array<SeriesType, 8> kSeriesTypes{
   SeriesType::Tv,
   SeriesType::Ova,
   SeriesType::Movie,
   SeriesType::Special,
   SeriesType::Ona,
   SeriesType::Music,
+  SeriesType::Manga,
+  SeriesType::Novel
 };
 
 constexpr std::array<MyStatus, 5> kMyStatuses{

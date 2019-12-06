@@ -58,6 +58,9 @@ int CALLBACK ListViewCompareProc(LPARAM lParam1, LPARAM lParam2,
 int CALLBACK AnimeListCompareProc(LPARAM lParam1, LPARAM lParam2,
                                   LPARAM lParamSort);
 
+int CALLBACK MangaListCompareProc(LPARAM lParam1, LPARAM lParam2,
+                                  LPARAM lParamSort);
+
 int GetAnimeIdFromSelectedListItem(win::ListView& listview);
 std::vector<int> GetAnimeIdsFromSelectedListItems(win::ListView& listview);
 LPARAM GetParamFromSelectedListItem(win::ListView& listview);

@@ -31,6 +31,7 @@ enum class Path {
   Database,
   DatabaseAnime,
   DatabaseAnimeRelations,
+  DatabaseManga,
   DatabaseImage,
   Feed,
   FeedHistory,
@@ -42,7 +43,8 @@ enum class Path {
   ThemeCurrent,
   User,
   UserHistory,
-  UserLibrary
+  UserLibrary,
+  UserLibraryManga
 };
 
 std::wstring GetUserDirectoryName(const sync::ServiceId service_id);
